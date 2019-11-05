@@ -552,7 +552,7 @@ classdef SnirfClass < AcqDataClass & FileLoadSaveClass
         
         % ---------------------------------------------------------
         function val = GetMetaDataTags(obj)
-            val = obj.metaDataTags;
+            val = obj.metaDataTags.Get();
         end
         
     end
@@ -880,6 +880,15 @@ classdef SnirfClass < AcqDataClass & FileLoadSaveClass
             % Find all stims for any conditions which match the time points. 
             for ii=1:length(obj.stim)
                 obj.stim(ii).DeleteStims(tPts);
+            end
+        end
+        
+        
+        % ----------------------------------------------------------------------------------
+        function ToggleStims(obj, tPts, condition)
+            % Find all stims for any conditions which match the time points. 
+            for ii=1:length(obj.stim)
+                obj.stim(ii).ToggleStims(tPts);
             end
         end
         
