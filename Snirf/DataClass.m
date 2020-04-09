@@ -105,9 +105,9 @@ classdef DataClass < FileLoadSaveClass
                 obj.time = h5read(fname, [parent, '/time']);
             	ii=1;
                 while 1
-                if ii > length(obj.measurementList)
-                    obj.measurementList(ii) = MeasListClass;
-                end
+                    if ii > length(obj.measurementList)
+                        obj.measurementList(ii) = MeasListClass;
+                    end
                     if obj.measurementList(ii).LoadHdf5(fname, [parent, '/measurementList', num2str(ii)]) < 0
                         obj.measurementList(ii).delete();
                         obj.measurementList(ii) = [];
