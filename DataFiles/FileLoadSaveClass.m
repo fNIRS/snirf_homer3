@@ -23,7 +23,7 @@ classdef FileLoadSaveClass < matlab.mixin.Copyable
         
         
         % ---------------------------------------------------------
-        function Load(obj, filename, format)
+        function varargout=Load(obj, filename, format)
             if ~exist('filename','var')
                 filename = obj.filename;
             end
@@ -41,8 +41,27 @@ classdef FileLoadSaveClass < matlab.mixin.Copyable
                     end
                 case obj.supportedFomats.hdf5
                     if ismethod(obj, 'LoadHdf5')
-                        obj.LoadHdf5(filename);
+                        
+                        flds=ListHDF5fields(filename);
+                        cnt=1; parent={};
+                        for i=1:length(flds)
+                            f=strsplit(flds{i},'/');
+                            if(length(f)>1 && ~isempty(strfind(f{2},'nirs')))
+                            parent{cnt}=['/' f{2}];
+                            cnt=cnt+1;
+                            end
+                        end
+                        parent=unique(parent);
+                        for i=1:length(parent)
+                            obj(i)=obj(1);
+                            obj(i).LoadHdf5(filename,parent{i});
+                        end
                     end
+            end
+            if(nargout>0)
+                varargout={obj};
+            elseif(length(parent)>1)
+                warning(['multiple /nirs entries found; use snirf=snirf.load(''' filename ''');']);
             end
         end
         
