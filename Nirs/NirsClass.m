@@ -84,7 +84,7 @@ classdef NirsClass < AcqDataClass & FileLoadSaveClass
         
         
         % ---------------------------------------------------------
-        function err = LoadMat(obj, fname)
+        function err = LoadMat(obj, fname, ~)
             err = 0;
             
             % Arg 1
@@ -134,7 +134,7 @@ classdef NirsClass < AcqDataClass & FileLoadSaveClass
         
         
         % ---------------------------------------------------------
-        function SaveMat(obj, fname)
+        function SaveMat(obj, fname, ~)
             if ~exist('fname','var') || isempty(fname)
                 fname = '';
             end
@@ -267,6 +267,10 @@ classdef NirsClass < AcqDataClass & FileLoadSaveClass
         
         % ---------------------------------------------------------
         function val = GetTime(obj, iBlk)
+            val = [];
+            if iBlk>1
+                return
+            end
             val = obj.t;
         end
         
@@ -328,12 +332,6 @@ classdef NirsClass < AcqDataClass & FileLoadSaveClass
             val = sprintf('NIRS v%s', obj.GetFormatVersion());
         end
                
-        
-        % ---------------------------------------------------------
-        function datamat = GetDataMatrix(obj, iBlk)
-            datamat = obj.d;
-        end
-        
         
         % ---------------------------------------------------------
         function SD = GetSDG(obj)
