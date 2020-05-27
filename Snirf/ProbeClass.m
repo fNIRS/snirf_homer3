@@ -3,9 +3,9 @@ classdef ProbeClass < FileLoadSaveClass
     properties
         wavelengths
         wavelengthsEmission
-        sourcePos
-        detectorPos
-        frequency
+        sourcePos2D
+        detectorPos2D
+        frequencies
         timeDelay
         timeDelayWidth
         momentOrder
@@ -29,9 +29,9 @@ classdef ProbeClass < FileLoadSaveClass
                     SD = varargin{1};
                     obj.wavelengths = SD.Lambda;
                     obj.wavelengthsEmission  = [];
-                    obj.sourcePos  = SD.SrcPos;
-                    obj.detectorPos  = SD.DetPos;
-                    obj.frequency  = 1;
+                    obj.sourcePos2D  = SD.SrcPos;
+                    obj.detectorPos2D  = SD.DetPos;
+                    obj.frequencies  = 1;
                     obj.timeDelay  = 0;
                     obj.timeDelayWidth  = 0;
                     obj.momentOrder = [];
@@ -50,9 +50,9 @@ classdef ProbeClass < FileLoadSaveClass
             else
                 obj.wavelengths          = [];
                 obj.wavelengthsEmission  = [];
-                obj.sourcePos  = [];
-                obj.detectorPos  = [];
-                obj.frequency  = 1;
+                obj.sourcePos2D  = [];
+                obj.detectorPos2D  = [];
+                obj.frequencies  = 1;
                 obj.timeDelay  = 0;
                 obj.timeDelayWidth  = 0;
                 obj.momentOrder = [];
@@ -60,6 +60,18 @@ classdef ProbeClass < FileLoadSaveClass
                 obj.correlationTimeDelayWidth = 0;
                 obj.sourceLabels = {};
                 obj.detectorLabels = {};
+            end
+        end
+
+        
+        
+        % -------------------------------------------------------
+        function ForwardCompatibility(obj)
+            if size(obj.sourcePos2D,2)<3
+                obj.sourcePos2D       = [obj.sourcePos2D, zeros(size(obj.sourcePos2D,1), 1)];
+            end
+            if size(obj.detectorPos2D,2)<3
+                obj.detectorPos2D     = [obj.detectorPos2D, zeros(size(obj.detectorPos2D,1), 1)];
             end
         end
 
@@ -99,15 +111,15 @@ classdef ProbeClass < FileLoadSaveClass
                 % Load datasets
                 obj.wavelengths               = HDF5_DatasetLoad(gid, 'wavelengths');
                 obj.wavelengthsEmission       = HDF5_DatasetLoad(gid, 'wavelengthsEmission');
-                obj.sourcePos                 = HDF5_DatasetLoad(gid, 'sourcePos', [], '2D');
-                obj.detectorPos               = HDF5_DatasetLoad(gid, 'detectorPos', [], '2D');
-                obj.frequency                 = HDF5_DatasetLoad(gid, 'frequency');
+                obj.sourcePos2D                 = HDF5_DatasetLoad(gid, 'sourcePos2D', [], '2D');
+                obj.detectorPos2D               = HDF5_DatasetLoad(gid, 'detectorPos2D', [], '2D');
+                obj.frequencies               = HDF5_DatasetLoad(gid, 'frequencies');
                 obj.timeDelay                 = HDF5_DatasetLoad(gid, 'timeDelay');
                 obj.timeDelayWidth            = HDF5_DatasetLoad(gid, 'timeDelayWidth');
                 obj.momentOrder               = HDF5_DatasetLoad(gid, 'momentOrder');
                 obj.correlationTimeDelay      = HDF5_DatasetLoad(gid, 'correlationTimeDelay');
                 obj.correlationTimeDelayWidth = HDF5_DatasetLoad(gid, 'correlationTimeDelayWidth');
-                obj.sourceLabels              = HDF5_DatasetLoad(gid, 'sourceLabels', obj.sourceLabels); %#ok<*PROPLC>
+                obj.sourceLabels              = HDF5_DatasetLoad(gid, 'sourceLabels', obj.sourceLabels);
                 obj.detectorLabels            = HDF5_DatasetLoad(gid, 'detectorLabels', obj.detectorLabels);
                                 
                 % Close group
@@ -116,6 +128,11 @@ classdef ProbeClass < FileLoadSaveClass
                 err=-1;
                 return;
             end
+            
+            % Call method to change future current and future versions of
+            % SNIRF data to Homer3 compatible structure
+            obj.ForwardCompatibility();
+            
         end
 
         
@@ -139,9 +156,9 @@ classdef ProbeClass < FileLoadSaveClass
             end     
             hdf5write_safe(fileobj, [location, '/wavelengths'], obj.wavelengths);
             hdf5write_safe(fileobj, [location, '/wavelengthsEmission'], obj.wavelengthsEmission);
-            hdf5write_safe(fileobj, [location, '/sourcePos'], obj.sourcePos, 'rw:2D');
-            hdf5write_safe(fileobj, [location, '/detectorPos'], obj.detectorPos, 'rw:2D');
-            hdf5write_safe(fileobj, [location, '/frequency'], obj.frequency);
+            hdf5write_safe(fileobj, [location, '/sourcePos2D'], obj.sourcePos2D(:,1:2), 'rw:2D');
+            hdf5write_safe(fileobj, [location, '/detectorPos2D'], obj.detectorPos2D(:,1:2), 'rw:2D');
+            hdf5write_safe(fileobj, [location, '/frequencies'], obj.frequencies);
             hdf5write_safe(fileobj, [location, '/timeDelay'], obj.timeDelay);
             hdf5write_safe(fileobj, [location, '/timeDelayWidth'], obj.timeDelayWidth);
             hdf5write_safe(fileobj, [location, '/momentOrder'], obj.momentOrder);
@@ -162,13 +179,13 @@ classdef ProbeClass < FileLoadSaveClass
         
         % ---------------------------------------------------------
         function srcpos = GetSrcPos(obj)
-            srcpos = obj.sourcePos;
+            srcpos = obj.sourcePos2D;
         end
         
         
         % ---------------------------------------------------------
         function detpos = GetDetPos(obj)
-            detpos = obj.detectorPos;
+            detpos = obj.detectorPos2D;
         end
         
         
@@ -181,13 +198,13 @@ classdef ProbeClass < FileLoadSaveClass
             if ~all(obj.wavelengthsEmission(:)==obj2.wavelengthsEmission(:))
                 return;
             end
-            if ~all(obj.sourcePos(:)==obj2.sourcePos(:))
+            if ~all(obj.sourcePos2D(:)==obj2.sourcePos2D(:))
                 return;
             end
-            if ~all(obj.detectorPos(:)==obj2.detectorPos(:))
+            if ~all(obj.detectorPos2D(:)==obj2.detectorPos2D(:))
                 return;
             end
-            if ~all(obj.frequency(:)==obj2.frequency(:))
+            if ~all(obj.frequencies(:)==obj2.frequencies(:))
                 return;
             end
             if ~all(obj.timeDelay(:)==obj2.timeDelay(:))
