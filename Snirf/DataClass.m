@@ -1,11 +1,17 @@
-classdef DataClass < FileLoadSaveClass
+classdef DataClass < matlab.mixin.Copyable
     
+    % SNIRF-spec class properties
     properties
         dataTimeSeries
         time
         measurementList
     end
     
+    % Non-SNIRF class properties
+    properties
+        filename
+        fileformat
+    end
     
     methods
         
@@ -221,8 +227,11 @@ classdef DataClass < FileLoadSaveClass
         
         % ---------------------------------------------------------
         function ml = GetMeasList(obj)
-            ml = [];
-            for ii=1:length(obj.measurementList)
+            % Preallocate for speed 
+            ml = ones(length(obj.measurementList), 4);
+            
+            % Convert obj.measurementList to matrix
+            for ii = 1:length(obj.measurementList)
                 % If this data contains block average then only get the measurements for first condition. That will
                 % contain all the measurement channels
                 if obj.measurementList(ii).GetCondition()>1
@@ -230,6 +239,12 @@ classdef DataClass < FileLoadSaveClass
                 end
                 ml(ii,:) = [obj.measurementList(ii).GetSourceIndex(), obj.measurementList(ii).GetDetectorIndex(), 1, obj.measurementList(ii).GetWavelengthIndex()];
             end
+            
+            % Remove unused rows that were pre-allocated
+            ml(ii+1:end,:) = [];
+
+            % Sort according to wavelength
+            ml = sortrows(ml,4);
         end
         
         
@@ -601,7 +616,7 @@ classdef DataClass < FileLoadSaveClass
                 return;
             end
             for ii=1:length(obj.measurementList)
-                if obj.measurementList(ii)~=obj2.measurementList(ii)
+                if ~(obj.measurementList(ii)==obj2.measurementList(ii))
                     return;
                 end
             end
@@ -611,6 +626,10 @@ classdef DataClass < FileLoadSaveClass
         
         % ----------------------------------------------------------------------------------
         function nbytes = MemoryRequired(obj)
+            nbytes = 0;
+            if isempty(obj)
+                return
+            end
             nbytes = sizeof(obj.dataTimeSeries) + sizeof(obj.time);
             for ii=1:length(obj.measurementList)
                 nbytes = nbytes + obj.measurementList(ii).MemoryRequired();

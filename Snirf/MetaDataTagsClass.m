@@ -1,9 +1,17 @@
-classdef MetaDataTagsClass  < FileLoadSaveClass
+classdef MetaDataTagsClass  < matlab.mixin.Copyable
 
+    % SNIRF-spec class properties
     properties
         tags
     end
-
+    
+    % Non-SNIRF class properties
+    properties
+        filename
+        fileformat
+    end
+    
+        
     methods
         
         % -------------------------------------------------------

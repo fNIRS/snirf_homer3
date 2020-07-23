@@ -1,5 +1,6 @@
-classdef AuxClass < FileLoadSaveClass
+classdef AuxClass < matlab.mixin.Copyable
     
+    % SNIRF-spec class properties
     properties
         name
         dataTimeSeries
@@ -7,10 +8,17 @@ classdef AuxClass < FileLoadSaveClass
         timeOffset
     end
     
+    % Non-SNIRF class properties
+    properties
+        filename
+        fileformat
+    end
+    
+    
     methods
         
         % -------------------------------------------------------
-        function obj = AuxClass(varargin)
+        function obj = AuxClass(varargin)            
             % Set class properties not part of the SNIRF format
             obj.fileformat = 'hdf5';
             
@@ -170,6 +178,10 @@ classdef AuxClass < FileLoadSaveClass
         
         % ----------------------------------------------------------------------------------
         function nbytes = MemoryRequired(obj)
+            nbytes = 0;
+            if isempty(obj)
+                return
+            end
             nbytes = sizeof(obj.name) + sizeof(obj.dataTimeSeries) + sizeof(obj.time) + sizeof(obj.timeOffset);
         end
         

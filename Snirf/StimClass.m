@@ -1,9 +1,17 @@
-classdef StimClass < FileLoadSaveClass
+classdef StimClass < matlab.mixin.Copyable
     
+    % SNIRF-spec class properties
     properties
         name
         data
     end
+    
+    % Non-SNIRF class properties
+    properties
+        filename
+        fileformat
+    end
+    
    
     % Properties not part of the SNIRF spec. These parameters aren't loaded or saved to files
     properties (Access = private)
@@ -91,7 +99,10 @@ classdef StimClass < FileLoadSaveClass
                 
                 % Load datasets
                 obj.name   = HDF5_DatasetLoad(gid, 'name');
-                obj.data   = HDF5_DatasetLoad(gid, 'data', [], '2D');
+                obj.data   = HDF5_DatasetLoad(gid, 'data', [], '2D');                
+                if all(obj.data(:)==0)
+                    obj.data = [];
+                end
                 
                 % Close group
                 HDF5_GroupClose(fileobj, gid, fid);
@@ -109,6 +120,10 @@ classdef StimClass < FileLoadSaveClass
         
         % -------------------------------------------------------
         function SaveHdf5(obj, fileobj, location)
+            if isempty(obj.data)
+                obj.data = 0;
+            end
+            
             % Arg 1
             if ~exist('fileobj', 'var') || isempty(fileobj)
                 error('Unable to save file. No file name given.')
@@ -120,7 +135,7 @@ classdef StimClass < FileLoadSaveClass
             elseif location(1)~='/'
                 location = ['/',location];
             end
-                       
+
             if ~exist(fileobj, 'file')
                 fid = H5F.create(fileobj, 'H5F_ACC_TRUNC', 'H5P_DEFAULT', 'H5P_DEFAULT');
                 H5F.close(fid);
@@ -129,10 +144,9 @@ classdef StimClass < FileLoadSaveClass
             
             % Since this is a writable writeable parameter AFTER it's creation, we 
             % call hdf5write_safe with the 'rw' option
-            if ~isempty(obj.data)
-                hdf5write_safe(fileobj, [location, '/data'], obj.data, 'rw:2D');
-            end
+            hdf5write_safe(fileobj, [location, '/data'], obj.data, 'rw:2D');
         end
+        
         
                 
         % -------------------------------------------------------
@@ -419,12 +433,22 @@ classdef StimClass < FileLoadSaveClass
             if isempty(obj.name)
                 return;
             end
+            if isempty(obj.data)
+                return;
+            end
+            if all(obj.data(:)==0)
+                return;
+            end
             b = false;
         end
         
                 
         % ----------------------------------------------------------------------------------
         function nbytes = MemoryRequired(obj)
+            nbytes = 0;
+            if isempty(obj)
+                return
+            end
             nbytes = sizeof(obj.name) + sizeof(obj.data) + sizeof(obj.filename) + sizeof(obj.fileformat) + sizeof(obj.supportedFomats) + 8;
         end
         

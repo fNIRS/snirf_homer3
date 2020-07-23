@@ -1,6 +1,6 @@
-classdef MeasListClass < FileLoadSaveClass
+classdef MeasListClass < matlab.mixin.Copyable
     
-    % Properties implementing the MeasList fields from the SNIRF spec
+    % SNIRF-spec class properties
     properties
         sourceIndex
         detectorIndex
@@ -13,7 +13,13 @@ classdef MeasListClass < FileLoadSaveClass
         moduleIndex
     end
     
-       
+    % Non-SNIRF class properties
+    properties
+        filename
+        fileformat
+    end
+    
+    
     methods
 
         function obj = MeasListClass(varargin)
