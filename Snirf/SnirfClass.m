@@ -9,7 +9,7 @@ classdef SnirfClass < matlab.mixin.Copyable
         aux
     end
     
-    properties (Access = public)
+    properties (Access = private)
         fid
         gid
         location

@@ -9,7 +9,7 @@ classdef AuxClass < matlab.mixin.Copyable
     end
     
     % Non-SNIRF class properties
-    properties
+    properties (Access = private)
         filename
         fileformat
     end
