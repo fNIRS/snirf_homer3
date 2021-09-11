@@ -61,9 +61,9 @@ classdef MeasListClass < matlab.mixin.Copyable
             if nargin==1 && isa(varargin{1}, 'MeasListClass')
                 obj                  = varargin{1}.copy();                    % shallow copy ok because MeasListClass has no handle properties 
             elseif nargin==1 
-                obj.sourceIndex      = varargin{1}(1);
-                obj.detectorIndex    = varargin{1}(2);
-                obj.wavelengthIndex  = varargin{1}(4);
+                obj.sourceIndex      = varargin{1}(:,1);
+                obj.detectorIndex    = varargin{1}(:,2);
+                obj.wavelengthIndex  = varargin{1}(:,4);
                 obj.dataType         = dataTypeValues.Raw.CW.Amplitude;
             elseif nargin==3
                 obj.sourceIndex      = varargin{1};
@@ -124,6 +124,7 @@ classdef MeasListClass < matlab.mixin.Copyable
                 obj.detectorIndex   = HDF5_DatasetLoad(gid, 'detectorIndex');
                 obj.wavelengthIndex = HDF5_DatasetLoad(gid, 'wavelengthIndex');
                 obj.dataType        = HDF5_DatasetLoad(gid, 'dataType');
+                obj.dataTypeIndex   = HDF5_DatasetLoad(gid, 'dataTypeIndex');
                 obj.dataTypeLabel   = HDF5_DatasetLoad(gid, 'dataTypeLabel', obj.dataTypeLabel);
                 obj.detectorIndex   = HDF5_DatasetLoad(gid, 'detectorIndex');
                 obj.sourcePower     = HDF5_DatasetLoad(gid, 'sourcePower');
@@ -272,6 +273,16 @@ classdef MeasListClass < matlab.mixin.Copyable
                 return;
             end
             B = true;
+        end
+        
+        
+        % -------------------------------------------------------
+        function B = ne(obj, obj2)
+            if obj==obj2
+                B = false;
+            else
+                B = true;
+            end
         end
         
         

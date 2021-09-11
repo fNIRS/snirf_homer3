@@ -161,6 +161,16 @@ classdef MetaDataTagsClass  < matlab.mixin.Copyable
         
         
         % -------------------------------------------------------
+        function B = ne(obj, obj2)
+            if obj==obj2
+                B = false;
+            else
+                B = true;
+            end
+        end
+        
+        
+        % -------------------------------------------------------
         function Add(obj, key, value)
             key(key==' ') = '';
             eval(sprintf('obj.tags.%s = value', key));
@@ -169,8 +179,15 @@ classdef MetaDataTagsClass  < matlab.mixin.Copyable
         
         
         % ----------------------------------------------------------------------------------
-        function tags = Get(obj)
+        function tags = Get(obj, name)
+            if ~exist('name', 'var')
+                name = '';
+            end
             fields = propnames(obj.tags);
+            k = find(strcmp(fields, name));
+            if ~isempty(k)
+                fields = fields(k);
+            end
             tags = repmat(struct('key','','value',[]),length(fields),1);
             for ii=1:length(fields)
                 eval(sprintf('tags(ii).key = ''%s'';', fields{ii}));

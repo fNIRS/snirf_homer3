@@ -237,7 +237,13 @@ classdef DataClass < matlab.mixin.Copyable
                 if obj.measurementList(ii).GetCondition()>1
                     break;
                 end
-                ml(ii,:) = [obj.measurementList(ii).GetSourceIndex(), obj.measurementList(ii).GetDetectorIndex(), 1, obj.measurementList(ii).GetWavelengthIndex()];
+                % Deal with the cases where the measurementList contains
+                % wavelengthIndex versus not
+                if ~isempty(obj.measurementList(ii).GetWavelengthIndex())
+                    ml(ii,:) = [obj.measurementList(ii).GetSourceIndex(), obj.measurementList(ii).GetDetectorIndex(), 1, obj.measurementList(ii).GetWavelengthIndex()];
+                else 
+                    ml(ii,:) = [obj.measurementList(ii).GetSourceIndex(), obj.measurementList(ii).GetDetectorIndex(), 1, 1];
+                end
             end
             
             % Remove unused rows that were pre-allocated
@@ -620,11 +626,21 @@ classdef DataClass < matlab.mixin.Copyable
                 return;
             end
             for ii=1:length(obj.measurementList)
-                if ~(obj.measurementList(ii) == obj2.measurementList(ii))
+                if obj.measurementList(ii)~=obj2.measurementList(ii)
                     return;
                 end
             end
             B = true;
+        end
+        
+        
+        % -------------------------------------------------------
+        function B = ne(obj, obj2)
+            if obj==obj2
+                B = false;
+            else
+                B = true;
+            end
         end
         
         

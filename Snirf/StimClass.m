@@ -4,17 +4,14 @@ classdef StimClass < matlab.mixin.Copyable
     properties
         name
         data
+        dataLabels
     end
     
-    % Non-SNIRF class properties
-    properties (Access = private)
-        filename
-        fileformat
-    end
-    
-   
     % Properties not part of the SNIRF spec. These parameters aren't loaded or saved to files
     properties (Access = private)
+        states  % Stim marks enabled/disabled. Not part of SNIRF
+        filename
+        fileformat
         errmargin
     end    
     
@@ -42,13 +39,15 @@ classdef StimClass < matlab.mixin.Copyable
                 if ischar(varargin{1})
                     obj.filename = varargin{1};
                     obj.Load(varargin{1}, obj.fileformat, varargin{2});
+                    % Note that states are not loaded from file
                 else
                     t        = varargin{1};
                     CondName = varargin{2};
                     obj.name = CondName;
                     for ii=1:length(t)
-                        obj.data(end+1,:) = [t(ii), 5, 1];
+                        obj.data(end+1,:) = [t(ii), 10, 1];
                     end
+                    obj.dataLabels = {'Onset', 'Duration', 'Amplitude'};
                 end
             elseif nargin==3
                 s        = varargin{1};
@@ -56,18 +55,21 @@ classdef StimClass < matlab.mixin.Copyable
                 CondName = varargin{3};
                 obj.name = CondName;
                 k = s>0 | s==-1 | s==-2;  % Include stim marks with these values
-                obj.data = [t(k), 5*ones(length(t(k)),1), s(k)];
+                obj.data = [t(k), 10*ones(length(t(k)),1), ones(length(t(k)),1)];
+                obj.states = [t(k) s(k)];
+                obj.dataLabels = {'Onset', 'Duration', 'Amplitude'};
             elseif nargin==0
                 obj.name = '';
                 obj.data = [];
+                obj.dataLabels = {'Onset', 'Duration', 'Amplitude'};
             end
-            
+            obj.SortTpts();
+            obj.updateStates();  % Generates enabled states to match the data array
         end
         
         
         % -------------------------------------------------------
         function err = LoadHdf5(obj, fileobj, location)
-            err = 0;
             
             % Arg 1
             if ~exist('fileobj','var') || (ischar(fileobj) && ~exist(fileobj,'file'))
@@ -97,23 +99,38 @@ classdef StimClass < matlab.mixin.Copyable
                 % Open group
                 [gid, fid] = HDF5_GroupOpen(fileobj, location);
                 
+                % Absence of optional aux field raises error > 0
+                if gid.double < 0
+                    err = 1;
+                    return;
+                end
+                
                 % Load datasets
                 obj.name   = HDF5_DatasetLoad(gid, 'name');
                 obj.data   = HDF5_DatasetLoad(gid, 'data', [], '2D');                
+                obj.dataLabels   = HDF5_DatasetLoad(gid, 'dataLabels', {});
                 if all(obj.data(:)==0)
                     obj.data = [];
                 end
+                if isempty(obj.dataLabels)
+                    obj.dataLabels = {'Onset', 'Duration', 'Amplitude'};
+                end
+                err = obj.ErrorCheck();
                 
                 % Close group
                 HDF5_GroupClose(fileobj, gid, fid);
                 
-            catch ME
+                obj.updateStates();
                 
-                err = -1;
-                return
+            catch
                 
-            end
-            
+                if gid.double > 0
+                    err = -2;
+                else
+                    err = 1;
+	            end
+	            
+	        end
         end
         
         
@@ -136,7 +153,7 @@ classdef StimClass < matlab.mixin.Copyable
                 location = ['/',location];
             end
 
-            if ~exist(fileobj, 'file')
+            if ~ispathvalid(fileobj, 'file')
                 fid = H5F.create(fileobj, 'H5F_ACC_TRUNC', 'H5P_DEFAULT', 'H5P_DEFAULT');
                 H5F.close(fid);
             end
@@ -145,18 +162,20 @@ classdef StimClass < matlab.mixin.Copyable
             % Since this is a writable writeable parameter AFTER it's creation, we 
             % call hdf5write_safe with the 'rw' option
             hdf5write_safe(fileobj, [location, '/data'], obj.data, 'rw:2D');
+            hdf5write_safe(fileobj, [location, '/dataLabels'], obj.dataLabels, 'rw');
         end
         
         
                 
         % -------------------------------------------------------
         function Update(obj, fileobj, location)
-            if ~exist(fileobj, 'file')
+            if ~ispathvalid(fileobj, 'file')
                 fid = H5F.create(fileobj, 'H5F_ACC_TRUNC', 'H5P_DEFAULT', 'H5P_DEFAULT');
                 H5F.close(fid);
             end
             hdf5write_safe(fileobj, [location, '/name'], obj.name);
             hdf5write_safe(fileobj, [location, '/data'], obj.data, 'w');
+            hdf5write_safe(fileobj, [location, '/dataLabels'], obj.dataLabels, 'w');
         end
         
         
@@ -164,6 +183,17 @@ classdef StimClass < matlab.mixin.Copyable
         function Copy(obj, obj2)
             obj.name = obj2.name;
             obj.data = obj2.data;
+            if isempty(obj2.dataLabels)
+                obj.dataLabels = {'Onset', 'Duration', 'Amplitude'};
+                if length(obj.dataLabels) < size(obj.data, 2)
+                    for i = 1:length(obj.dataLabels) - 3
+                       obj.dataLabels{end + 1} = ''; 
+                    end
+                end
+            else
+                obj.dataLabels = obj2.dataLabels;
+            end
+            obj.states = obj2.states;
         end
         
         
@@ -176,16 +206,81 @@ classdef StimClass < matlab.mixin.Copyable
             
             % Dimensions matter so dimensions must equal
             if ~all(size(obj.data)==size(obj2.data))
-                return;
+                if ~isempty(obj.data) || ~isempty(obj2.data)
+	                return;
+	            end
             end
             
             % Now check contents
             if ~all(obj.data(:)==obj2.data(:))
                 return;
             end
+            
+            if length(obj.dataLabels) ~= length(obj2.dataLabels)
+                return;
+            end
+            for ii = 1:length(obj.dataLabels)
+                if ~strcmp(obj.dataLabels{ii}, obj2.dataLabels{ii})
+                    return;
+                end
+            end
             B = true;
         end
                       
+        
+        % -------------------------------------------------------
+        function B = ne(obj, obj2)
+            if obj==obj2
+                B = false;
+            else
+                B = true;
+            end
+        end
+        
+        
+        % -------------------------------------------------------
+        function updateStates(obj)
+            % Generate or regenerate a state list compatible with the data
+            % array. Match up existing states with new list of time points
+            if isempty(obj.data)
+                return;
+            elseif size(obj.states, 1) == size(obj.data, 1)
+                obj.states(:, 1) = obj.data(:, 1);
+                return;
+            end
+            old = obj.states;
+            obj.states = ones(size(obj.data, 1), 2);
+            for i=1:size(obj.data, 1)  % For each data row
+                if ~isempty(old)
+                    k = find(abs(obj.data(i, 1) - old(:, 1)) < obj.errmargin);
+                else
+                    k = []; 
+                end
+                if isempty(k) % If old state not there, generate new one
+                    obj.states(i, :) = [obj.data(i, 1), 1];
+                else % Get old state if it exists 
+                    obj.states(i, :) = old(k, :);
+                end
+            end
+        end
+        
+        
+        
+        % ----------------------------------------------------------------------------------
+        function err = ErrorCheck(obj)
+            err = 0;
+            
+            % According to SNIRF spec, stim data is invalid if it has > 0 AND < 3 columns
+            if isempty(obj.data)
+                return;
+            end
+            if size(obj.data, 2)<3
+                err = -2;
+                return;
+            end
+        end
+        
+                
     end
     
     
@@ -207,6 +302,7 @@ classdef StimClass < matlab.mixin.Copyable
         % -------------------------------------------------------
         function SetData(obj, val)
             obj.data = val;
+            obj.updateStates();
         end
         
         % -------------------------------------------------------
@@ -214,6 +310,35 @@ classdef StimClass < matlab.mixin.Copyable
             val = obj.data;
         end
 
+        % -------------------------------------------------------
+        function SetStates(obj, states)
+            obj.states = states;
+            obj.updateStates();
+        end
+        
+        
+        % -------------------------------------------------------
+        function val = GetStates(obj)
+            val = obj.states;
+        end
+
+        
+        % -------------------------------------------------------
+        function SetDataLabels(obj, dataLabels)
+            if length(dataLabels) < size(obj.data, 2)
+               for i = 1:size(obj.data, 2) - length(dataLabels)
+                  dataLabels{end + 1} = ''; 
+               end
+            end
+            obj.dataLabels = dataLabels(1:size(obj.data, 2));
+        end
+        
+        
+        % -------------------------------------------------------
+        function val = GetDataLabels(obj)
+            val = obj.dataLabels;            
+        end
+        
     end
     
     
@@ -239,48 +364,70 @@ classdef StimClass < matlab.mixin.Copyable
 
         
         % ----------------------------------------------------------------------------------
-        function AddStims(obj, tPts, duration, val)
+        function AddStims(obj, tPts, duration, amp, more)
+            % Add one or more stims to with a given duration, amplitude, and additional
+            % column data given by more
             if ~exist('duration','var')
-                duration = 5;
+                duration = 10;
             end
-            if ~exist('val','var')
-                val = 1;
+            if ~exist('amp','var')
+                amp = 1;
             end
-            for ii=1:length(tPts)
                 if ~obj.Exists(tPts(ii))
-                    obj.data(end+1,:) = [tPts(ii), duration, val];
+               more = zeros(size(obj.data, 2) - 3);
+                end
+            if ~isempty(obj.data)
+                if ~isempty(more) & length(more) > (size(obj.data, 2) - 3)
+                    obj.data(:, end+length(more)) = 0;  % Pad to accomodate additional data columns 
+                end
+                for i=1:length(tPts)
+                    if ~obj.Exists(tPts(i))
+                        obj.data(end+1,:) = [tPts(i), duration, amp, more];
+                        obj.states(end+1,:) = [tPts(i), 1];
+                    end
+                end 
+            else  % If this stim is being added to an empty condition
+                for i = 1:length(tPts)
+                    obj.data(i,:) = [tPts(i), duration, amp, more];
+                    obj.states(i,:) = [tPts(i), 1];
                 end
             end
         end
 
         
         % ----------------------------------------------------------------------------------
-        function EditValue(obj, tPts, val)
+        function EditAmplitude(obj, tPts, amp)
             if isempty(obj.data)
                 return;
             end
-            if ~exist('val','var')
-                val = 1;
+            if ~exist('amp','var')
+                amp = 1;
             end
             for ii=1:length(tPts)
                 k = find( abs(obj.data(:,1)-tPts(ii)) < obj.errmargin );
                 if isempty(k)
                     continue;
                 end
-                obj.data(k,3) = val;
+                obj.data(k,3) = amp;
             end
         end
 
         
-        % -------------------------------------------------------
-        function [ts, v] = GetStim(obj)
-            ts = [];
-            v = [];
+        % ----------------------------------------------------------------------------------
+        function EditState(obj, tPts, state)
             if isempty(obj.data)
                 return;
             end
-            ts = obj.data(:,1);
-            v = obj.data(:,3);
+            if ~exist('state','var')
+                state = 1;
+            end
+            for ii=1:length(tPts)
+                k = find( abs(obj.states(:,1)-tPts(ii)) < obj.errmargin );
+                if isempty(k)
+                    continue;
+                end
+                obj.states(k,2) = state;
+        end
         end
         
         
@@ -296,6 +443,7 @@ classdef StimClass < matlab.mixin.Copyable
                 return;
             end
             obj.data(k,1) = tPts;
+            obj.SortTpts();
         end
 
         
@@ -352,12 +500,12 @@ classdef StimClass < matlab.mixin.Copyable
         
         
         % ----------------------------------------------------------------------------------
-        function SetValues(obj, vals, tPts)
+        function SetAmplitudes(obj, amps, tPts)
             if isempty(obj.data)
                 return;
             end
-            if ~exist('vals','var')
-                vals = 1;
+            if ~exist('amps','var')
+                amps = 1;
             end
             if ~exist('tPts','var')
                 tPts = obj.data(:,1);
@@ -369,13 +517,13 @@ classdef StimClass < matlab.mixin.Copyable
                     continue;
                 end
             end
-            obj.data(k,3) = vals;
+            obj.data(k,3) = amps;
         end
 
         
         % -------------------------------------------------------
-        function vals = GetValues(obj, tPts)
-            vals = [];
+        function amps = GetAmplitudes(obj, tPts)
+            amps = [];
             if isempty(obj.data)
                 return;
             end
@@ -386,7 +534,7 @@ classdef StimClass < matlab.mixin.Copyable
             for ii=1:length(tPts)
                 k(ii) = find( abs(obj.data(:,1)-tPts(ii)) < obj.errmargin );
             end
-            vals = obj.data(k,3);
+            amps = obj.data(k,3);
         end
         
         
@@ -399,10 +547,12 @@ classdef StimClass < matlab.mixin.Copyable
             % Find all stims for any conditions which match the time points and 
             % delete them from data. 
             k = [];
+            j = [];
             for ii=1:length(tPts)
                 k = [k, find( abs(obj.data(:,1)-tPts(ii)) < obj.errmargin )];
             end
             obj.data(k,:) = [];
+            obj.states(k,:) = [];
         end
         
         
@@ -414,12 +564,54 @@ classdef StimClass < matlab.mixin.Copyable
             end
             
             % Find all stims for any conditions which match the time points and 
-            % flip it's value.
+            % flip their states
             k = [];
             for ii=1:length(tPts)
-                k = [k, find( abs(obj.data(:,1)-tPts(ii)) < obj.errmargin )];
+                k = [k, find( abs(obj.states(:,1)-tPts(ii)) < obj.errmargin )];
             end
-            obj.data(k,3) = -1*obj.data(k,3);
+            obj.states(k,2) = -1*obj.states(k,2);
+        end
+        
+        
+        
+        % ----------------------------------------------------------------------------------
+        function AddStimColumn(obj, name, initValue)
+            if ~exist('name', 'var')
+               name = ''; 
+            end
+            if ~exist('initValue', 'var')
+               initValue = 0; 
+            end
+            obj.dataLabels{end + 1} = name;
+            obj.data(:, end + 1) = initValue * ones(size(obj.data, 1), 1);
+        end
+
+        
+        
+        % ----------------------------------------------------------------------------------
+        function DeleteStimColumn(obj, idx)
+            if ~exist('idx', 'var') || idx <= size(obj.data, 2) - 3
+                return;
+            else
+                obj.data(:, idx) = [];
+                if length(obj.dataLabels) >= idx
+                   obj.dataLabels(idx) = []; 
+                end
+            end
+        end
+        
+        
+        
+        % ----------------------------------------------------------------------------------
+        function RenameStimColumn(obj, oldname, newname)
+            if ~exist('oldname', 'var') || ~exist('newname', 'var')
+                return;
+            end
+            for i = 1:length(obj.dataLabels)
+                if strcmp(oldname, obj.dataLabels{i})
+                   obj.dataLabels{i} = newname;
+                end
+            end
         end
         
         
@@ -443,13 +635,26 @@ classdef StimClass < matlab.mixin.Copyable
         end
         
                 
+        
+        % ----------------------------------------------------------------------------------
+        function SortTpts(obj)
+            try
+                [~, idx] = sort(obj.data(:, 1));
+                obj.data = obj.data(idx, :);
+                obj.states = obj.states(idx, :);
+            catch  % Index error
+               return; 
+            end
+        end
+           
+        
         % ----------------------------------------------------------------------------------
         function nbytes = MemoryRequired(obj)
             nbytes = 0;
             if isempty(obj)
                 return
             end
-            nbytes = sizeof(obj.name) + sizeof(obj.data) + sizeof(obj.filename) + sizeof(obj.fileformat) + sizeof(obj.supportedFomats) + 8;
+            nbytes = sizeof(obj.states) + sizeof(obj.name) + sizeof(obj.data) + sizeof(obj.GetFilename()) + sizeof(obj.GetFileFormat()) + sizeof(obj.GetSupportedFormats()) + 8;
         end
         
     end

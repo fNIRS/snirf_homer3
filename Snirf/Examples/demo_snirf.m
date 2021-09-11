@@ -21,7 +21,7 @@ nirsfiles = dir([examplesDir, '*.nirs']);
 fprintf('\n')
 
 % Go through all the sample .nirs files
-for ii=1:length(nirsfiles)
+for ii = 1:length(nirsfiles)
     
     % Convert sample .nirs file to SNIRF file (*.snirf) 
     [pname,fname,ext] = fileparts([examplesDir, nirsfiles(ii).name]);

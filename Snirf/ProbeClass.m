@@ -7,12 +7,13 @@ classdef ProbeClass < matlab.mixin.Copyable
         sourcePos2D
         detectorPos2D
         landmarkPos2D
+        landmarkPos3D
         sourcePos3D
         detectorPos3D
         frequencies
         timeDelays
         timeDelayWidths
-        momentOrder
+        momentOrders
         correlationTimeDelays
         correlationTimeDelayWidths
         sourceLabels
@@ -40,21 +41,37 @@ classdef ProbeClass < matlab.mixin.Copyable
                     SD = varargin{1};
                     obj.wavelengths = SD.Lambda;
                     obj.wavelengthsEmission  = [];
-                    if size(SD.SrcPos, 2) == 3 & SD.SrcPos(1, 3) ~= 0
-                        obj.sourcePos3D  = SD.SrcPos;
-                        obj.detectorPos3D  = SD.DetPos;
-                        obj.sourcePos2D  = [];
-                        obj.detectorPos2D  = [];
+                    if isfield(SD,'SrcPos2D') &  ~isempty(SD.SrcPos2D)
+                        obj.sourcePos2D  = SD.SrcPos2D;
                     else
                         obj.sourcePos2D  = SD.SrcPos;
+                    end
+                    if isfield(SD,'DetPos2D') & ~isempty(SD.DetPos2D)
+                        obj.detectorPos2D  = SD.DetPos2D;
+                    else
                         obj.detectorPos2D  = SD.DetPos;
-                        obj.sourcePos3D  = [];
-                        obj.detectorPos3D  = [];
+                    end
+                    if isfield(SD,'SrcPos3D') & ~isempty(SD.SrcPos3D)
+                        obj.sourcePos3D  = SD.SrcPos3D;
+                    else
+                        obj.sourcePos3D  = SD.SrcPos;
+                    end
+                    if isfield(SD,'DetPos3D') & ~isempty(SD.DetPos3D)
+                        obj.detectorPos3D  = SD.DetPos3D;
+                    else
+                        obj.detectorPos3D  = SD.DetPos;
+                    end
+                    if isfield(SD,'refpts')
+                        obj.landmarkPos3D = SD.refpts.pos;
+                        obj.landmarkLabels = SD.refpts.labels;
+                        if isfield(SD,'refpts2D')
+                            obj.landmarkPos2D = SD.refpts2D.pos;
+                        end
                     end
                     obj.frequencies  = 1;
                     obj.timeDelays  = 0;
                     obj.timeDelayWidths  = 0;
-                    obj.momentOrder = [];
+                    obj.momentOrders = [];
                     obj.correlationTimeDelays = 0;
                     obj.correlationTimeDelayWidths = 0;
                     for ii=1:size(SD.SrcPos)
@@ -77,7 +94,7 @@ classdef ProbeClass < matlab.mixin.Copyable
                 obj.frequencies  = 1;
                 obj.timeDelays  = 0;
                 obj.timeDelayWidths  = 0;
-                obj.momentOrder = [];
+                obj.momentOrders = [];
                 obj.correlationTimeDelays = 0;
                 obj.correlationTimeDelayWidths = 0;
                 obj.sourceLabels = {};
@@ -151,12 +168,13 @@ classdef ProbeClass < matlab.mixin.Copyable
                 obj.sourcePos2D               = HDF5_DatasetLoad(gid, 'sourcePos2D', [], '2D');
                 obj.detectorPos2D             = HDF5_DatasetLoad(gid, 'detectorPos2D', [], '2D');
                 obj.landmarkPos2D             = HDF5_DatasetLoad(gid, 'landmarkPos2D', [], '2D');
-                obj.sourcePos3D               = HDF5_DatasetLoad(gid, 'sourcePos3D', [], '2D');
-                obj.detectorPos3D             = HDF5_DatasetLoad(gid, 'detectorPos3D', [], '2D');
+                obj.sourcePos3D               = HDF5_DatasetLoad(gid, 'sourcePos3D', [], '3D');
+                obj.detectorPos3D             = HDF5_DatasetLoad(gid, 'detectorPos3D', [], '3D');
+                obj.landmarkPos3D             = HDF5_DatasetLoad(gid, 'landmarkPos3D', [], '2D');
                 obj.frequencies               = HDF5_DatasetLoad(gid, 'frequencies');
                 obj.timeDelays                 = HDF5_DatasetLoad(gid, 'timeDelays');
                 obj.timeDelayWidths            = HDF5_DatasetLoad(gid, 'timeDelayWidths');
-                obj.momentOrder               = HDF5_DatasetLoad(gid, 'momentOrder');
+                obj.momentOrders               = HDF5_DatasetLoad(gid, 'momentOrders');
                 obj.correlationTimeDelays      = HDF5_DatasetLoad(gid, 'correlationTimeDelays');
                 obj.correlationTimeDelayWidths = HDF5_DatasetLoad(gid, 'correlationTimeDelayWidths');
                 obj.sourceLabels              = HDF5_DatasetLoad(gid, 'sourceLabels', obj.sourceLabels);
@@ -176,6 +194,21 @@ classdef ProbeClass < matlab.mixin.Copyable
             % Call method to change future current and future versions of
             % SNIRF data to Homer3 compatible structure
             obj.ForwardCompatibility();
+            
+            % for Homer3 usage, add 3D positions if they are empty
+            if isempty(obj.sourcePos3D)
+                obj.sourcePos3D = obj.sourcePos2D;
+                if size(obj.sourcePos3D,2)<3
+                    obj.sourcePos3D(:,3) = 0;
+                end
+            end
+            
+            if isempty(obj.detectorPos3D)
+                obj.detectorPos3D = obj.detectorPos2D;
+                if size(obj.detectorPos3D,2)<3
+                    obj.detectorPos3D(:,3) = 0;
+                end
+            end
             
         end
 
@@ -201,22 +234,21 @@ classdef ProbeClass < matlab.mixin.Copyable
             end     
             hdf5write_safe(fileobj, [location, '/wavelengths'], obj.wavelengths);
             hdf5write_safe(fileobj, [location, '/wavelengthsEmission'], obj.wavelengthsEmission);
-            if ~isempty(obj.sourcePos2D)
-                hdf5write_safe(fileobj, [location, '/sourcePos2D'], obj.sourcePos2D(:,1:2), 'rw:2D');
-                hdf5write_safe(fileobj, [location, '/detectorPos2D'], obj.detectorPos2D(:,1:2), 'rw:2D');
-            end
-            if ~isempty(obj.sourcePos3D)
-                hdf5write_safe(fileobj, [location, '/sourcePos3D'], obj.sourcePos3D(:,1:3), 'rw:2D');
-                hdf5write_safe(fileobj, [location, '/detectorPos3D'], obj.detectorPos3D(:,1:3), 'rw:2D');
-            end
+            hdf5write_safe(fileobj, [location, '/sourcePos2D'], obj.sourcePos2D(:,1:2), 'rw:2D');
+            hdf5write_safe(fileobj, [location, '/detectorPos2D'], obj.detectorPos2D(:,1:2), 'rw:2D');
+            hdf5write_safe(fileobj, [location, '/landmarkPos2D'], obj.landmarkPos2D, 'rw:2D');
+            hdf5write_safe(fileobj, [location, '/sourcePos3D'], obj.sourcePos3D, 'rw:3D');
+            hdf5write_safe(fileobj, [location, '/detectorPos3D'], obj.detectorPos3D, 'rw:3D');
+            hdf5write_safe(fileobj, [location, '/landmarkPos3D'], obj.landmarkPos3D, 'rw:3D');
             hdf5write_safe(fileobj, [location, '/frequencies'], obj.frequencies);
             hdf5write_safe(fileobj, [location, '/timeDelays'], obj.timeDelays);
             hdf5write_safe(fileobj, [location, '/timeDelayWidths'], obj.timeDelayWidths);
-            hdf5write_safe(fileobj, [location, '/momentOrder'], obj.momentOrder);
+            hdf5write_safe(fileobj, [location, '/momentOrders'], obj.momentOrders);
             hdf5write_safe(fileobj, [location, '/correlationTimeDelays'], obj.correlationTimeDelays);
             hdf5write_safe(fileobj, [location, '/correlationTimeDelayWidths'], obj.correlationTimeDelayWidths);
             hdf5write_safe(fileobj, [location, '/sourceLabels'], obj.sourceLabels);
             hdf5write_safe(fileobj, [location, '/detectorLabels'], obj.detectorLabels);
+            hdf5write_safe(fileobj, [location, '/landmarkLabels'], obj.landmarkLabels);
         end
         
         
@@ -229,20 +261,47 @@ classdef ProbeClass < matlab.mixin.Copyable
         
         
         % ---------------------------------------------------------
-        function srcpos = GetSrcPos(obj)
-            srcpos = obj.sourcePos2D;
+        function srcpos = GetSrcPos(obj,flag2d)
+            if ~exist('flag2d','var')
+                flag2d = 0;
+            end
+            if flag2d==0
+                srcpos = obj.sourcePos3D;
+            else
+	            srcpos = obj.sourcePos2D;
+	        end
         end
         
         
         % ---------------------------------------------------------
-        function detpos = GetDetPos(obj)
+        function detpos = GetDetPos(obj,flag2d)
+            if ~exist('flag2d','var')
+                flag2d = 0;
+            end
+            if flag2d==0
+                detpos = obj.detectorPos3D;
+            else
             detpos = obj.detectorPos2D;
+        end
         end
         
         
         % -------------------------------------------------------
         function B = eq(obj, obj2)
             B = false;
+            if isempty(obj) && ~isempty(obj2)
+                return;
+            end
+            if isempty(obj) && ~isempty(obj2)
+                return;
+            end
+            if ~isempty(obj) && isempty(obj2)
+                return;
+            end
+            if isempty(obj) && isempty(obj2)
+                b = true;
+                return;
+            end
             if ~all(obj.wavelengths(:)==obj2.wavelengths(:))
                 return;
             end
@@ -255,6 +314,12 @@ classdef ProbeClass < matlab.mixin.Copyable
             if ~all(obj.detectorPos2D(:)==obj2.detectorPos2D(:))
                 return;
             end
+            if ~all(obj.sourcePos3D(:)==obj2.sourcePos3D(:))
+                return;
+            end
+            if ~all(obj.detectorPos3D(:)==obj2.detectorPos3D(:))
+                return;
+            end
             if ~all(obj.frequencies(:)==obj2.frequencies(:))
                 return;
             end
@@ -264,7 +329,7 @@ classdef ProbeClass < matlab.mixin.Copyable
             if ~all(obj.timeDelayWidths(:)==obj2.timeDelayWidths(:))
                 return;
             end
-            if ~all(obj.momentOrder(:)==obj2.momentOrder(:))
+            if ~all(obj.momentOrders(:)==obj2.momentOrders(:))
                 return;
             end
             if ~all(obj.correlationTimeDelays(:)==obj2.correlationTimeDelays(:))
@@ -290,6 +355,16 @@ classdef ProbeClass < matlab.mixin.Copyable
                 end
             end
             B = true;
+        end
+        
+        
+        % -------------------------------------------------------
+        function B = ne(obj, obj2)
+            if obj==obj2
+                B = false;
+            else
+                B = true;
+            end
         end
         
         

@@ -8,7 +8,7 @@ classdef AuxClass < matlab.mixin.Copyable
         timeOffset
     end
     
-    % Non-SNIRF class properties
+    % Properties not part of the SNIRF spec. These parameters aren't loaded or saved to files
     properties (Access = private)
         filename
         fileformat
@@ -74,8 +74,10 @@ classdef AuxClass < matlab.mixin.Copyable
             try
                 % Open group
                 [gid, fid] = HDF5_GroupOpen(fileobj, location);
-                if gid<0
-                    err = -1;
+                
+                % Absence of optional aux field raises error > 0
+                if gid.double < 0
+                    err = 1;
                     return;
                 end
 
@@ -84,10 +86,20 @@ classdef AuxClass < matlab.mixin.Copyable
                 obj.time            = HDF5_DatasetLoad(gid, 'time');
                 obj.timeOffset      = HDF5_DatasetLoad(gid, 'timeOffset');
 
+                err = obj.ErrorCheck();
+                
                 % Close group
                 HDF5_GroupClose(fileobj, gid, fid);
+                
             catch
-                err = -2;
+                
+                if gid.double > 0
+                    % If optional aux field exists BUT is in some way invalid it raises error < 0
+                    err = -6;
+                else
+                    err = 1;
+                end
+                
             end
         end
 
@@ -180,6 +192,16 @@ classdef AuxClass < matlab.mixin.Copyable
         end
         
         
+        % -------------------------------------------------------
+        function B = ne(obj, obj2)
+            if obj==obj2
+                B = false;
+            else
+                B = true;
+            end
+        end
+        
+        
         % ----------------------------------------------------------------------------------
         function nbytes = MemoryRequired(obj)
             nbytes = 0;
@@ -190,6 +212,49 @@ classdef AuxClass < matlab.mixin.Copyable
         end
         
         
+        % ----------------------------------------------------------------------------------
+        function b = IsEmpty(obj)
+            b = true;
+            if isempty(obj)
+                return
+            end
+            if isempty(obj.name)
+                return
+            end
+            if isempty(obj.dataTimeSeries)
+                return
+            end
+            if isempty(obj.time)
+                return
+            end
+            if length(obj.dataTimeSeries) ~= length(obj.time)
+                return
+            end
+            b = false;
+        end
+        
+        
+        % ----------------------------------------------------------------------------------
+        function err = ErrorCheck(obj)
+            err = 0;
+            if isempty(obj.name)
+                err = -1;
+                return
+            end
+            if isempty(obj.dataTimeSeries)
+                err = -2;
+                return
+            end
+            if isempty(obj.time)
+                err = -3;
+                return
+            end
+            if length(obj.dataTimeSeries) ~= length(obj.time)
+                err = -4;
+                return
+            end
+        end
+               
     end
     
 end
